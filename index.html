@@ -316,7 +316,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 <div id="dialog" role="dialog"></div>
 <div id="toast"></div>
 <div id="drop">Rilascia i tuoi MP3 qui</div>
-<input type="file" id="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg" multiple class="hidden">
+<input type="file" id="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg,.playlist,.m3u,.m3u8,.pls,.json" multiple class="hidden">
 <audio id="audio" preload="auto" playsinline></audio>
 
 <script>
@@ -539,13 +539,13 @@ function albums(){
   const m = new Map();
   for (const t of tracks) { if (!t.album) continue; const k = norm(t.album) + '|' + norm(t.artist);
     if (!m.has(k)) m.set(k, {key:k, name:t.album, artist:t.artist, tracks:[]}); m.get(k).tracks.push(t); }
-  for (const a of m.values()) { a.tracks.sort((x,y) => (x.trackNo||999)-(y.trackNo||999) || coll(x.title,y.title)); a.cover = a.tracks.find(t => t.cover) || a.tracks[0]; a.year = (a.tracks.find(t=>t.year)||{}).year || ''; }
+  for (const a of m.values()) { a.tracks.sort((x,y) => (x.trackNo||999)-(y.trackNo||999) || coll(x.title,y.title)); a.cover = a.tracks.find(t => cover(t)) || a.tracks[0]; a.year = (a.tracks.find(t=>t.year)||{}).year || ''; }
   return [...m.values()].sort((x,y) => coll(x.name, y.name));
 }
 function artists(){
   const m = new Map();
   for (const t of tracks) { const k = norm(t.artist); if (!m.has(k)) m.set(k, {key:k, name:t.artist, tracks:[]}); m.get(k).tracks.push(t); }
-  for (const a of m.values()) { a.tracks.sort((x,y) => coll(x.album||'',y.album||'') || (x.trackNo||0)-(y.trackNo||0)); a.cover = a.tracks.find(t => t.cover) || a.tracks[0]; }
+  for (const a of m.values()) { a.tracks.sort((x,y) => coll(x.album||'',y.album||'') || (x.trackNo||0)-(y.trackNo||0)); a.cover = a.tracks.find(t => cover(t)) || a.tracks[0]; }
   return [...m.values()].sort((x,y) => coll(x.name, y.name));
 }
 const songsSorted = () => [...tracks].sort((a,b) => coll(a.title, b.title));
@@ -591,7 +591,7 @@ function renderHome(){
   const al = albums(), ar = artists(), f = favs();
   const quick = [];
   quick.push(`<button class="qt" data-go="fav"><div class="art fav" style="color:#fff">${ic('heartF', 22, 0)}</div><span>Brani che ti piacciono</span></button>`);
-  for (const p of playlists.slice(0, 3)) quick.push(`<button class="qt" data-go="pl:${p.id}">${artHTML(plTracks(p).find(t=>t.cover)||null,'',p.name)}<span>${esc(p.name)}</span></button>`);
+  for (const p of playlists.slice(0, 3)) quick.push(`<button class="qt" data-go="pl:${p.id}">${artHTML(plTracks(p).find(t => cover(t))||null,'',p.name)}<span>${esc(p.name)}</span></button>`);
   for (const a of al) { if (quick.length >= 6) break; quick.push(`<button class="qt" data-go="al:${esc(a.key)}">${artHTML(a.cover)}<span>${esc(a.name)}</span></button>`); }
   h += `<div class="quick">${quick.join('')}</div>`;
 
@@ -666,7 +666,7 @@ function renderLibrary(){
     const fv = favs();
     h += `<div class="list">
       <button class="row" data-go="fav"><div class="art fav" style="border-radius:6px;color:#fff">${ic('heartF', 22, 0)}</div><div class="meta"><div class="t">Brani che ti piacciono</div><div class="s">Playlist · ${fv.length} brani</div></div></button>
-      ${playlists.map(p => { const pt = plTracks(p); return `<button class="row" data-go="pl:${p.id}">${artHTML(pt.find(t=>t.cover)||null,'',p.name)}<div class="meta"><div class="t">${esc(p.name)}</div><div class="s">Playlist · ${pt.length} brani</div></div></button>`; }).join('')}
+      ${playlists.map(p => { const pt = plTracks(p); return `<button class="row" data-go="pl:${p.id}">${artHTML(pt.find(t => cover(t))||null,'',p.name)}<div class="meta"><div class="t">${esc(p.name)}</div><div class="s">Playlist · ${pt.length} brani</div></div></button>`; }).join('')}
       <button class="row" data-act="newpl"><div class="art" style="border-radius:6px;color:var(--text)">${ic('plus', 24, 2)}</div><div class="meta"><div class="t">Crea playlist</div></div></button></div>`;
   }
   V.innerHTML = h;
@@ -677,7 +677,7 @@ function collection(view){
   if (view === 'fav') return { title:'Brani che ti piacciono', sub:`${favs().length} brani`, list:favs(), fav:true, kind:'fav' };
   if (k === 'al') { const a = albums().find(x => x.key === id); if (!a) return null; return { title:a.name, sub:`${a.artist}${a.year ? ' · ' + a.year : ''} · ${a.tracks.length} brani`, list:a.tracks, art:a.cover, kind:'al', artistKey:norm(a.artist) }; }
   if (k === 'ar') { const a = artists().find(x => x.key === id); if (!a) return null; return { title:a.name, sub:`${a.tracks.length} brani`, list:a.tracks, art:a.cover, round:true, kind:'ar' }; }
-  if (k === 'pl') { const p = playlists.find(x => x.id === id); if (!p) return null; const l = plTracks(p); return { title:p.name, sub:`Playlist · ${l.length} brani · ${fmt(l.reduce((s,t)=>s+(t.duration||0),0))}`, list:l, art:l.find(t=>t.cover)||null, kind:'pl', pl:p }; }
+  if (k === 'pl') { const p = playlists.find(x => x.id === id); if (!p) return null; const l = plTracks(p); return { title:p.name, sub:`Playlist · ${l.length} brani · ${fmt(l.reduce((s,t)=>s+(t.duration||0),0))}`, list:l, art:l.find(t => cover(t))||null, kind:'pl', pl:p }; }
   if (k === 'lib') { S.stack.pop(); S.tab = 'library'; S.libFilter = id; return null; }
   return null;
 }
@@ -954,6 +954,148 @@ async function ytPlaylistIds(list){
   });
 }
 
+/* Decoder XZ/LZMA2 minimale (per i file .playlist di Demus) */
+function unxz(u8){
+  if (!(u8[0] === 0xFD && u8[1] === 0x37 && u8[2] === 0x7A && u8[3] === 0x58 && u8[4] === 0x5A && u8[5] === 0)) throw new Error('not xz');
+  const ct = u8[7] & 0x0F, checkSize = ct === 0 ? 0 : ct <= 3 ? 4 : ct <= 6 ? 8 : ct <= 9 ? 16 : ct <= 12 ? 32 : 64;
+  let p = 12, out = new Uint8Array(Math.max(65536, u8.length * 8)), n = 0;
+  const put = b => { if (n === out.length) { const o = new Uint8Array(out.length * 2); o.set(out); out = o; } out[n++] = b; };
+  let lc = 0, lp = 0, pb = 0, lit = null, state = 0, r0 = 0, r1 = 0, r2 = 0, r3 = 0;
+  const isMatch = new Uint16Array(192), isRep = new Uint16Array(12), g0 = new Uint16Array(12), g1 = new Uint16Array(12), g2 = new Uint16Array(12), rep0Long = new Uint16Array(192);
+  const slot = new Uint16Array(256), posDec = new Uint16Array(115), align = new Uint16Array(16);
+  const mkLen = () => ({ c: new Uint16Array(2), low: new Uint16Array(128), mid: new Uint16Array(128), high: new Uint16Array(256) });
+  const lenD = mkLen(), repD = mkLen();
+  let range = 0, code = 0, ip = 0;
+  const norm = () => { if (range < 16777216) { range *= 256; code = code * 256 + u8[ip++]; } };
+  const bit = (pr, i) => { const b = (range >>> 11) * pr[i]; if (code < b) { pr[i] += (2048 - pr[i]) >> 5; range = b; norm(); return 0; } pr[i] -= pr[i] >> 5; code -= b; range -= b; norm(); return 1; };
+  const direct = k => { let r = 0; while (k--) { range = Math.floor(range / 2); let b = 0; if (code >= range) { code -= range; b = 1; } r = r * 2 + b; norm(); } return r; };
+  const tree = (pr, off, k) => { let m = 1; for (let i = 0; i < k; i++) m = (m << 1) + bit(pr, off + m); return m - (1 << k); };
+  const rtree = (pr, off, k) => { let m = 1, s = 0; for (let i = 0; i < k; i++) { const b = bit(pr, off + m); m = (m << 1) + b; s |= b << i; } return s; };
+  const len = (d, ps) => bit(d.c, 0) === 0 ? tree(d.low, ps << 3, 3) : bit(d.c, 1) === 0 ? 8 + tree(d.mid, ps << 3, 3) : 16 + tree(d.high, 0, 8);
+  const reset = () => {
+    for (const a of [isMatch, isRep, g0, g1, g2, rep0Long, slot, posDec, align, lenD.c, lenD.low, lenD.mid, lenD.high, repD.c, repD.low, repD.mid, repD.high, lit]) a.fill(1024);
+    state = 0; r0 = r1 = r2 = r3 = 0;
+  };
+  const chunk = size => {
+    const end = n + size;
+    while (n < end) {
+      const ps = n & ((1 << pb) - 1);
+      if (bit(isMatch, (state << 4) + ps) === 0) {
+        const prev = n ? out[n - 1] : 0, base = 0x300 * (((n & ((1 << lp) - 1)) << lc) + (prev >> (8 - lc)));
+        let s = 1;
+        if (state >= 7) { let mb = out[n - r0 - 1]; do { const m = (mb >> 7) & 1; mb <<= 1; const b = bit(lit, base + ((1 + m) << 8) + s); s = (s << 1) | b; if (m !== b) break; } while (s < 0x100); }
+        while (s < 0x100) s = (s << 1) | bit(lit, base + s);
+        put(s - 0x100); state = state < 4 ? 0 : state < 10 ? state - 3 : state - 6; continue;
+      }
+      let L;
+      if (bit(isRep, state)) {
+        if (bit(g0, state) === 0) {
+          if (bit(rep0Long, (state << 4) + ps) === 0) { state = state < 7 ? 9 : 11; put(out[n - r0 - 1]); continue; }
+        } else {
+          let d; if (bit(g1, state) === 0) d = r1; else { if (bit(g2, state) === 0) d = r2; else { d = r3; r3 = r2; } r2 = r1; } r1 = r0; r0 = d;
+        }
+        L = len(repD, ps); state = state < 7 ? 8 : 11;
+      } else {
+        r3 = r2; r2 = r1; r1 = r0; L = len(lenD, ps); state = state < 7 ? 7 : 10;
+        const sl = tree(slot, Math.min(L, 3) << 6, 6);
+        if (sl < 4) r0 = sl;
+        else {
+          const nb = (sl >> 1) - 1; let d = (2 | (sl & 1)) * Math.pow(2, nb);
+          if (sl < 14) d += rtree(posDec, d - sl, nb);
+          else d += direct(nb - 4) * 16 + rtree(align, 0, 4);
+          r0 = d;
+        }
+      }
+      L += 2;
+      if (r0 >= n) throw new Error('xz: bad distance');
+      for (let k = 0; k < L && n < end; k++) put(out[n - r0 - 1]);
+    }
+  };
+  while (u8[p] !== 0) {
+    p += (u8[p] + 1) * 4; // block header
+    for (;;) {
+      const c = u8[p++];
+      if (c === 0) break;
+      if (c === 1 || c === 2) { const sz = ((u8[p] << 8) | u8[p + 1]) + 1; p += 2; for (let i = 0; i < sz; i++) put(u8[p++]); continue; }
+      if (c < 0x80) throw new Error('xz: bad chunk');
+      const un = ((c & 0x1F) << 16) + (u8[p] << 8) + u8[p + 1] + 1, pk = (u8[p + 2] << 8) + u8[p + 3] + 1; p += 4;
+      const rs = (c >> 5) & 3;
+      if (rs >= 2) { let d = u8[p++]; pb = Math.floor(d / 45); d %= 45; lp = Math.floor(d / 9); lc = d % 9; lit = new Uint16Array(0x300 << (lc + lp)); }
+      if (rs >= 1) reset();
+      ip = p + 1; range = 0xFFFFFFFF; code = 0; for (let i = 0; i < 4; i++) code = code * 256 + u8[ip++];
+      chunk(un); p += pk;
+    }
+    while (p % 4) p++;
+    p += checkSize;
+  }
+  return out.subarray(0, n);
+}
+
+/* ---------- file di playlist (.playlist di Demus, .m3u, .pls, .json) ---------- */
+const isListFile = f => /\.(playlist|m3u8?|pls|json)$/i.test(f.name);
+async function addYTMeta(m){
+  const ex = tracks.find(t => t.kind === 'yt' && t.ytId === m.v); if (ex) return ex.id;
+  if (!m.title) return addYT(m.v);
+  const art = m.art ? String(m.art).replace(/=w\d+-h\d+/, '=w544-h544') : `https://i.ytimg.com/vi/${m.v}/hqdefault.jpg`;
+  const t = { id: uid(), kind: 'yt', ytId: m.v, title: String(m.title), artist: String(m.artist || 'YouTube'), album: String(m.album || ''), year: '', genre: '', trackNo: +m.no || 0,
+    cover: null, coverUrl: art, duration: +m.duration || 0, added: Date.now() + Math.random(), plays: 0, lastPlayed: 0, fav: false };
+  await db.put('tracks', t); tracks.push(t); byId.set(t.id, t); return t.id;
+}
+const pick = (...v) => { for (const x of v) { if (x == null) continue; if (typeof x === 'string' || typeof x === 'number') return String(x); if (x.name) return String(x.name); if (Array.isArray(x) && x.length) return pick(x[0]); } return ''; };
+async function importPlaylistFile(f){
+  let u8 = new Uint8Array(await f.arrayBuffer());
+  if (u8[0] === 0xFD && u8[1] === 0x37 && u8[2] === 0x7A) u8 = unxz(u8);
+  else if (u8[0] === 0x1f && u8[1] === 0x8b && 'DecompressionStream' in window) u8 = new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+  const text = new TextDecoder().decode(u8).replace(/^﻿/, '');
+  let name = f.name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' '), entries = [];
+  if (/^\s*[\[{]/.test(text)) {
+    const j = JSON.parse(text);
+    name = pick(j.title, j.name) || name;
+    const arr = Array.isArray(j) ? j : (j.songs || j.tracks || j.items || j.videos || j.entries || []);
+    entries = arr.map(s => {
+      const id = s.videoId || s.youtubeId || s.ytId || (typeof s.id === 'string' && /^[\w-]{11}$/.test(s.id) ? s.id : null);
+      return { v: id, title: pick(s.title, s.name), artist: pick(s.artistName, s.artist, s.artists, s.author), album: pick(s.albumTitle, s.album), duration: s.duration || s.durationSeconds,
+        art: pick(s.artwork, s.thumbnailUrl, s.thumbnail, s.cover), no: s.albumIndex, url: pick(s.url, s.link), raw: pick(s.path, s.file, s.filename) };
+    });
+  } else entries = parseList(text, 'https://local.invalid/');
+  const ids = [], missing = [];
+  const prog = $('#prog');
+  for (let k = 0; k < entries.length; k++) {
+    const e = entries[k]; prog.style.width = Math.max(6, k / entries.length * 100) + '%';
+    try {
+      if (e.v) { ids.push(await addYTMeta(e)); continue; }
+      const link = e.url && /^https?:\/\//i.test(e.url) && !/^https:\/\/local\.invalid\//.test(e.url) ? e.url : '';
+      if (link) {
+        if (SANDBOX) { missing.push(e.title || link); continue; }
+        const y = ytIdOf(link);
+        if (y && y.v) ids.push(await addYTMeta({ v: y.v, title: e.title && splitTitle(e.title).title, artist: e.title && splitTitle(e.title).artist }));
+        else ids.push(...await fetchAudio(link, e.title ? splitTitle(e.title) : null));
+        continue;
+      }
+      const file = String(e.raw || '').split(/[\\/]/).pop();
+      const st = e.title ? splitTitle(e.title) : fromName(file || '');
+      const hit = tracks.find(t => file && t.fname === file) || tracks.find(t => st.title && norm(t.title) === norm(st.title) && (!st.artist || norm(t.artist) === norm(st.artist))) || tracks.find(t => st.title && norm(t.title) === norm(st.title));
+      if (hit) ids.push(hit.id); else missing.push(e.title || file || '?');
+    } catch(err) { console.warn(err); missing.push(e.title || e.raw || e.url || '?'); }
+  }
+  prog.style.width = '0';
+  if (!ids.length) { await dialog({ title: 'Playlist vuota', text: missing.length ? `Non ho trovato nessuno dei ${missing.length} brani nella libreria. Carica prima i file MP3, poi importa di nuovo la playlist.` : 'Il file non contiene brani che riesco a leggere.', ok: 'OK', noCancel: true }); return null; }
+  const pl = await makePlaylist(name || 'Playlist', ids);
+  return { pl, missing };
+}
+async function handleFiles(list){
+  const all = [...list], lists = all.filter(isListFile), audio = all.filter(f => !isListFile(f));
+  if (audio.length) await importFiles(audio);
+  for (const f of lists) {
+    let r = null;
+    try { r = await importPlaylistFile(f); } catch(e) { console.warn(e); await dialog({ title: 'File non leggibile', text: `Non riesco a leggere “${f.name}”. Se viene da un’altra app, mandamelo e aggiungo il formato.`, ok: 'OK', noCancel: true }); continue; }
+    if (!r) continue;
+    render(); go('pl:' + r.pl.id);
+    if (r.missing.length) await dialog({ title: `“${r.pl.name}” importata`, text: `${r.pl.ids.length} brani aggiunti. ${r.missing.length} non trovati: ${r.missing.slice(0, 8).join(', ')}${r.missing.length > 8 ? '…' : ''}. Carica quei file e reimporta la playlist per completarla.`, ok: 'OK', noCancel: true });
+    else toast(`Playlist “${r.pl.name}” · ${r.pl.ids.length} brani`);
+  }
+}
+
 /* ---------- importa da link ---------- */
 function directURL(u){
   try {
@@ -986,14 +1128,14 @@ function parseList(text, base){
   if (/^\s*\[playlist\]/i.test(text)) {
     const files = {}, titles = {};
     text.split(/\r?\n/).forEach(l => { let m = l.match(/^File(\d+)=(.+)$/i); if (m) files[m[1]] = m[2].trim(); m = l.match(/^Title(\d+)=(.+)$/i); if (m) titles[m[1]] = m[2].trim(); });
-    Object.keys(files).sort((a, b) => a - b).forEach(k => out.push({ url: new URL(files[k], base).href, title: titles[k] }));
+    Object.keys(files).sort((a, b) => a - b).forEach(k => { let url = ''; try { url = new URL(files[k], base).href; } catch(e) {} out.push({ url, title: titles[k], raw: files[k] }); });
     return out;
   }
   for (let l of text.split(/\r?\n/)) {
     l = l.trim(); if (!l) continue;
     if (l.startsWith('#EXTINF')) { pendingTitle = l.replace(/^#EXTINF:[^,]*,/, '').trim(); continue; }
     if (l.startsWith('#')) continue;
-    try { out.push({ url: new URL(l, base).href, title: pendingTitle }); } catch(e) {}
+    try { out.push({ url: new URL(l, base).href, title: pendingTitle, raw: l }); } catch(e) { out.push({ url: '', title: pendingTitle, raw: l }); }
     pendingTitle = null;
   }
   return out;
@@ -1065,7 +1207,7 @@ async function makePlaylist(name, ids){
 }
 function addMusicSheet(){
   openSheet(`<div class="sh"><div style="font-weight:700;font-size:17px">Aggiungi musica</div></div>
-    <button class="opt" data-am="files">${ic('upload', 22, 2)}Carica file dal dispositivo</button>
+    <button class="opt" data-am="files">${ic('upload', 22, 2)}<span>Carica file dal dispositivo<br><small style="color:var(--mute);font-size:12.5px">MP3, M4A… e playlist (.playlist di Demus, .m3u, .pls)</small></span></button>
     <button class="opt" data-am="link">${ic('link', 22, 2)}Incolla un link</button>`);
   $('#sheet').onclick = e => { const b = e.target.closest('[data-am]'); if (!b) return; $('#sheet').onclick = null; closeAll();
     if (b.dataset.am === 'files') $('#file').click(); else addLinkSheet(); };
@@ -1202,7 +1344,7 @@ async function settings(){
     <div style="padding:0 20px">
     <div class="stat"><div><b>${tracks.length}</b><span>brani</span></div><div><b>${fmt(tot).split(':').slice(0,-1).join(':') || 0}</b><span>ore:min di musica</span></div><div><b>${used || '—'}</b><span>spazio usato${quota ? ' su ' + quota : ''}</span></div></div>
     <div class="setrow"><div class="x">Archiviazione<small>${memMode ? 'Temporanea: questo browser non permette di salvare i file. Apri l’app dal suo indirizzo per salvarli.' : persisted ? 'Protetta: il browser non cancellerà la tua musica.' : 'La musica è salvata su questo dispositivo, in questo browser.'}</small></div></div>
-    <button class="setrow" data-st="import">${ic('upload', 22, 2)}<div class="x">Carica altra musica<small>MP3, M4A, WAV, FLAC, OGG</small></div></button>
+    <button class="setrow" data-st="import">${ic('upload', 22, 2)}<div class="x">Carica altra musica<small>MP3, M4A, WAV, FLAC, OGG · playlist .playlist, .m3u, .pls</small></div></button>
     <button class="setrow" data-st="link">${ic('link', 22, 2)}<div class="x">Aggiungi da link<small>YouTube, Dropbox, Google Drive, file MP3, playlist .m3u</small></div></button>
     <button class="setrow" data-st="wipe" style="color:#ff6b6b">${ic('trash', 22, 2)}<div class="x">Svuota libreria<small style="color:#c77">Elimina tutti i brani e le playlist da questo dispositivo</small></div></button>
     </div>`);
@@ -1249,7 +1391,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Enter' && e.target.closest && e.target.closest('[data-row]')) e.target.click();
   else if (e.key === 'Escape') { if ($('#scrim').classList.contains('on')) closeAll(); else if ($('#queue').classList.contains('open')) $('#queue').classList.remove('open'); else closeFull(); }
 });
-$('#file').onchange = e => { importFiles(e.target.files); e.target.value = ''; };
+$('#file').onchange = e => { handleFiles(e.target.files); e.target.value = ''; };
 document.addEventListener('paste', e => { if (e.target.closest && e.target.closest('input,textarea')) return; const t = (e.clipboardData && e.clipboardData.getData('text')) || ''; if (/https?:\/\//.test(t)) { e.preventDefault(); addLinkSheet(t); } });
 $('#miniMeta').onclick = openFull; $('#miniArt').onclick = openFull;
 $('#miniPP').onclick = togglePlay; $('#miniFav').onclick = () => PL.cur && toggleFav(PL.cur.id);
@@ -1276,7 +1418,7 @@ $('#prev').innerHTML = ic('prev', 30); $('#next').innerHTML = ic('next', 30); $(
   addEventListener('dragenter', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { n++; d.classList.add('on'); } });
   addEventListener('dragleave', () => { n = Math.max(0, n - 1); if (!n) d.classList.remove('on'); });
   addEventListener('dragover', e => e.preventDefault());
-  addEventListener('drop', e => { e.preventDefault(); n = 0; d.classList.remove('on'); if (e.dataTransfer?.files?.length) importFiles(e.dataTransfer.files); });
+  addEventListener('drop', e => { e.preventDefault(); n = 0; d.classList.remove('on'); if (e.dataTransfer?.files?.length) handleFiles(e.dataTransfer.files); });
 })();
 
 /* ---------- boot ---------- */
