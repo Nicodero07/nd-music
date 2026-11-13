@@ -316,7 +316,8 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 <div id="dialog" role="dialog"></div>
 <div id="toast"></div>
 <div id="drop">Rilascia i tuoi MP3 qui</div>
-<input type="file" id="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg,.playlist,.m3u,.m3u8,.pls,.json" multiple class="hidden">
+<input type="file" id="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg" multiple class="hidden">
+<input type="file" id="filePl" multiple class="hidden">
 <audio id="audio" preload="auto" playsinline></audio>
 
 <script>
@@ -1083,6 +1084,12 @@ async function importPlaylistFile(f){
   const pl = await makePlaylist(name || 'Playlist', ids);
   return { pl, missing };
 }
+async function handlePlaylistPick(list){
+  // qui il selettore accetta qualsiasi file: i non-audio sono trattati come playlist
+  const all = [...list], audio = all.filter(f => /^audio\//.test(f.type) || /\.(mp3|m4a|aac|wav|flac|ogg|opus)$/i.test(f.name));
+  const rest = all.filter(f => !audio.includes(f)).map(f => isListFile(f) ? f : new File([f], f.name + '.playlist', { type: f.type }));
+  return handleFiles([...audio, ...rest]);
+}
 async function handleFiles(list){
   const all = [...list], lists = all.filter(isListFile), audio = all.filter(f => !isListFile(f));
   if (audio.length) await importFiles(audio);
@@ -1207,10 +1214,11 @@ async function makePlaylist(name, ids){
 }
 function addMusicSheet(){
   openSheet(`<div class="sh"><div style="font-weight:700;font-size:17px">Aggiungi musica</div></div>
-    <button class="opt" data-am="files">${ic('upload', 22, 2)}<span>Carica file dal dispositivo<br><small style="color:var(--mute);font-size:12.5px">MP3, M4A… e playlist (.playlist di Demus, .m3u, .pls)</small></span></button>
+    <button class="opt" data-am="files">${ic('upload', 22, 2)}<span>Carica MP3 dal dispositivo<br><small style="color:var(--mute);font-size:12.5px">MP3, M4A, WAV, FLAC, OGG</small></span></button>
+    <button class="opt" data-am="pl">${ic('list', 22, 2)}<span>Importa una playlist<br><small style="color:var(--mute);font-size:12.5px">File .playlist di Demus, .m3u, .pls</small></span></button>
     <button class="opt" data-am="link">${ic('link', 22, 2)}Incolla un link</button>`);
   $('#sheet').onclick = e => { const b = e.target.closest('[data-am]'); if (!b) return; $('#sheet').onclick = null; closeAll();
-    if (b.dataset.am === 'files') $('#file').click(); else addLinkSheet(); };
+    if (b.dataset.am === 'files') $('#file').click(); else if (b.dataset.am === 'pl') $('#filePl').click(); else addLinkSheet(); };
 }
 
 /* session restore */
@@ -1344,7 +1352,8 @@ async function settings(){
     <div style="padding:0 20px">
     <div class="stat"><div><b>${tracks.length}</b><span>brani</span></div><div><b>${fmt(tot).split(':').slice(0,-1).join(':') || 0}</b><span>ore:min di musica</span></div><div><b>${used || '—'}</b><span>spazio usato${quota ? ' su ' + quota : ''}</span></div></div>
     <div class="setrow"><div class="x">Archiviazione<small>${memMode ? 'Temporanea: questo browser non permette di salvare i file. Apri l’app dal suo indirizzo per salvarli.' : persisted ? 'Protetta: il browser non cancellerà la tua musica.' : 'La musica è salvata su questo dispositivo, in questo browser.'}</small></div></div>
-    <button class="setrow" data-st="import">${ic('upload', 22, 2)}<div class="x">Carica altra musica<small>MP3, M4A, WAV, FLAC, OGG · playlist .playlist, .m3u, .pls</small></div></button>
+    <button class="setrow" data-st="import">${ic('upload', 22, 2)}<div class="x">Carica altra musica<small>MP3, M4A, WAV, FLAC, OGG</small></div></button>
+    <button class="setrow" data-st="pl">${ic('list', 22, 2)}<div class="x">Importa una playlist<small>File .playlist di Demus, .m3u, .pls</small></div></button>
     <button class="setrow" data-st="link">${ic('link', 22, 2)}<div class="x">Aggiungi da link<small>YouTube, Dropbox, Google Drive, file MP3, playlist .m3u</small></div></button>
     <button class="setrow" data-st="wipe" style="color:#ff6b6b">${ic('trash', 22, 2)}<div class="x">Svuota libreria<small style="color:#c77">Elimina tutti i brani e le playlist da questo dispositivo</small></div></button>
     </div>`);
@@ -1352,6 +1361,7 @@ async function settings(){
     const b = e.target.closest('[data-st]'); if (!b) return; $('#sheet').onclick = null;
     if (b.dataset.st === 'import') { closeAll(); $('#file').click(); }
     else if (b.dataset.st === 'link') { closeAll(); addLinkSheet(); }
+    else if (b.dataset.st === 'pl') { closeAll(); $('#filePl').click(); }
     else { const ok = await dialog({ title: 'Svuotare la libreria?', text: 'Tutti i brani e le playlist verranno eliminati da questo dispositivo. L’operazione non si può annullare.', ok: 'Svuota', danger: true });
       if (ok) { doPause(); audio.removeAttribute('src'); await Promise.all(['tracks','audio','playlists','kv'].map(s => db.clear(s))); tracks = []; playlists = []; byId.clear(); PL.queue = []; PL.orig = []; PL.cur = null; closeFull(); updateNow(); setTab('home'); toast('Libreria svuotata'); } }
   };
@@ -1392,6 +1402,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Escape') { if ($('#scrim').classList.contains('on')) closeAll(); else if ($('#queue').classList.contains('open')) $('#queue').classList.remove('open'); else closeFull(); }
 });
 $('#file').onchange = e => { handleFiles(e.target.files); e.target.value = ''; };
+$('#filePl').onchange = e => { handlePlaylistPick(e.target.files); e.target.value = ''; };
 document.addEventListener('paste', e => { if (e.target.closest && e.target.closest('input,textarea')) return; const t = (e.clipboardData && e.clipboardData.getData('text')) || ''; if (/https?:\/\//.test(t)) { e.preventDefault(); addLinkSheet(t); } });
 $('#miniMeta').onclick = openFull; $('#miniArt').onclick = openFull;
 $('#miniPP').onclick = togglePlay; $('#miniFav').onclick = () => PL.cur && toggleFav(PL.cur.id);
